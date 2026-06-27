@@ -1,0 +1,59 @@
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import joblib
+
+# Load the saved model and scaler
+@st.cache_resource
+def load_assets():
+    model = joblib.load('house_price_model.pkl')
+    scaler = joblib.load('scaler.pkl')
+    return model, scaler
+
+model, scaler = load_assets()
+
+# Load dataset to compute medians for background features
+@st.cache_data
+def load_background_medians():
+    df = pd.read_csv('house_prices.csv')
+    return {
+        'TotalBsmtSF': float(df['TotalBsmtSF'].median()),
+        'FullBath': float(df['FullBath'].median()),
+        'LotArea': float(df['LotArea'].median()),
+        'YearRemodAdd': float(df['YearRemodAdd'].median())
+    }
+
+background_medians = load_background_medians()
+
+st.title("🏡 Real Estate Price Predictor")
+st.write("Adjust the primary features to see the estimated house price in real-time.")
+
+# Sidebar for user inputs
+st.sidebar.header("Input House Features")
+overall_qual = st.sidebar.slider("Overall Quality (1-10)", 1, 10, 6)
+gr_liv_area = st.sidebar.number_input("Total Living Area (sq ft)", min_value=500, max_value=10000, value=2000)
+garage_cars = st.sidebar.slider("Garage Capacity (Cars)", 0, 5, 2)
+year_built = st.sidebar.slider("Year Built", 1872, 2010, 1990)
+
+if st.button("Predict Price"):
+    # Combine the 4 active UI inputs and the 4 background medians in the exact order the model expects
+    input_data = pd.DataFrame([{
+        'OverallQual': overall_qual,
+        'GrLivArea': gr_liv_area,
+        'GarageCars': garage_cars,
+        'YearBuilt': year_built,
+        'TotalBsmtSF': background_medians['TotalBsmtSF'],
+        'FullBath': background_medians['FullBath'],
+        'LotArea': background_medians['LotArea'],
+        'YearRemodAdd': background_medians['YearRemodAdd']
+    }])
+
+    # Scale the input data using the trained scaler
+    input_data_scaled = scaler.transform(input_data)
+
+    # Predict the price
+    price = model.predict(input_data_scaled)[0]
+
+    st.success(f"### Estimated Value: ${price:,.2f}")
+    st.balloons()
